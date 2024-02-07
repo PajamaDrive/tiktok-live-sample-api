@@ -1,0 +1,11 @@
+{
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": true,
+		"module": "nodenext",
+		"target": "es2022",
+		"strict": true,
+		"rootDir": "./src",
+		"outDir": "dist"
+	}
+}

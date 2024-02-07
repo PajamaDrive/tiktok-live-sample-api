@@ -1,0 +1,5 @@
+export enum FUNC_TYPE {
+	LINEAR = 0,
+	QUADRATIC,
+	SIGMOID
+}
