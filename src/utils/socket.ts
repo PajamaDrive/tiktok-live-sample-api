@@ -25,7 +25,7 @@ let parameter: Parameter = {
 export const connectSocket = (server: Server) => {
 	const io = new SocketServer(server, {
 		cors: {
-			origin: 'http://localhost:5173',
+			origin: process.env.CLIENT_URL,
 			credentials: true,
 			methods: ['GET', 'POST']
 		}
