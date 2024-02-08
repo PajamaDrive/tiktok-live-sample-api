@@ -8,8 +8,6 @@ const server = createServer(app);
 
 connectSocket(server);
 
-app.get('/', (_, res) => res.send('Sever is Up'));
-
 server.listen(port, () => {
 	console.log(`app listening port ${port}`);
 });
