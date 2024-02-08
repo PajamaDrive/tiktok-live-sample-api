@@ -1,6 +1,11 @@
 import { drawRaffle, drawWeightedRaffle, pickChoice } from '../utils/raffle.js';
 
-export interface GiftEmitMessage {
+interface SocketId {
+	socketId: string;
+}
+
+export interface GiftEmitMessage extends SocketId {
+	socketId: string;
 	userName: string;
 	diamond: number;
 	raffle: ReturnType<typeof drawRaffle>;
@@ -24,7 +29,7 @@ export interface Gift {
 /**
  * @see https://github.com/zerodytrash/TikTok-Live-Connector#connected
  */
-export interface ConnectState {
+export interface ConnectState extends SocketId {
 	isConnected: boolean;
 	roomId: number;
 }
