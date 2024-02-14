@@ -10,6 +10,7 @@ import {
 	disconnectEventName,
 	disconnectMessage
 } from '../const/socket.js';
+import { randomUUID } from 'crypto';
 
 const parameterMap: Map<string, Parameter> = new Map();
 
@@ -26,25 +27,22 @@ export const setUpSocketServer = (server: Server) => {
 		}
 	});
 	io.on('connection', async (socket) => {
-		const socketId = socket.id;
-		parameterMap.set(socketId, defaultParameter);
-		await setConnectTiktokLiveListener(socketId, socket, io);
-		setParametersListener(socketId, socket);
+		const userId = randomUUID();
+		parameterMap.set(userId, defaultParameter);
+		socket.join(userId);
+		await setConnectTiktokLiveListener(userId, socket, io);
+		setParametersListener(userId, socket);
 	});
 };
 
 /**
  * TikTok Liveとの接続を確立するlistener
- * @param {string} socketId ソケットID
+ * @param {string} id ユーザID
  * @param {Socket} socket ソケット
  * @param {SocketServer} server Socket.ioサーバ
  * @param {WebcastPushConnection} tiktokLiveConnection Tiktok Liveとの接続情報
  */
-const setConnectTiktokLiveListener = async (
-	socketId: string,
-	socket: Socket,
-	server: SocketServer
-) => {
+const setConnectTiktokLiveListener = async (id: string, socket: Socket, server: SocketServer) => {
 	socket.on(connectEventName, async (userName: string) => {
 		const tiktokLiveConnection = new WebcastPushConnection(userName);
 		await tiktokLiveConnection
@@ -52,13 +50,13 @@ const setConnectTiktokLiveListener = async (
 			.then((state: ConnectState) => {
 				console.log(`Connected to roomID $${state.roomId}`);
 				// 接続情報をクライアントに送信
-				emitConnect(socketId, server, state);
+				emitConnect(id, server, state);
 				// 各種listenerの設定
-				setGiftListener(socketId, server, tiktokLiveConnection);
-				setDisconnectTiktokLiveListener(socketId, socket, server, tiktokLiveConnection);
+				setGiftListener(id, server, tiktokLiveConnection);
+				setDisconnectTiktokLiveListener(id, socket, server, tiktokLiveConnection);
 			})
 			.catch((err) => {
-				emitDisconnect(socketId, server);
+				emitDisconnect(id, server);
 				console.log('Failed to connect', err);
 			});
 	});
@@ -67,13 +65,13 @@ const setConnectTiktokLiveListener = async (
 /**
  * ギフトの通知を受け取るlistener
  * @see https://github.com/zerodytrash/TikTok-Live-Connector#gift
- * @param {string} socketId ソケットID
+ * @param {string} id ユーザID
  * @param {Socket} socket ソケット
  * @param {SocketServer} server Socket.ioサーバ
  * @param {WebcastPushConnection} tiktokLiveConnection Tiktok Liveとの接続情報
  */
 const setGiftListener = (
-	socketId: string,
+	id: string,
 	server: SocketServer,
 	tiktokLiveConnection: WebcastPushConnection
 ) => {
@@ -83,51 +81,51 @@ const setGiftListener = (
 			console.log(
 				`[gift] userID: ${data.userId} sends ${data.giftId} | diamonds: ${data.diamondCount} x ${data.repeatCount}`
 			);
-			emitGift(socketId, server, data);
+			emitGift(id, server, data);
 		}
 	});
 };
 
 /**
  * パラメータの更新を行うlistener
- * @param {string} socketId ソケットID
+ * @param {string} id ユーザID
  * @param {Socket} socket ソケット
  */
-const setParametersListener = (socketId: string, socket: Socket) => {
+const setParametersListener = (id: string, socket: Socket) => {
 	socket.on('updateParameters', (message: Parameter) => {
-		parameterMap.set(socketId, message);
-		console.log(`Updated Parameter: [${socketId}] ${JSON.stringify(parameterMap.get(socketId))}`);
+		parameterMap.set(id, message);
+		console.log(`Updated Parameter: [${id}] ${JSON.stringify(parameterMap.get(id))}`);
 	});
 };
 
 /**
  * TikTok Liveとの接続を切断するlistener
- * @param {string} socketId ソケットID
+ * @param {string} id ユーザID
  * @param {Socket} socket ソケット
  * @param {SocketServer} server Socket.ioサーバ
  * @param {WebcastPushConnection} tiktokLiveConnection Tiktok Liveとの接続情報
  */
 const setDisconnectTiktokLiveListener = (
-	socketId: string,
+	id: string,
 	socket: Socket,
 	server: SocketServer,
 	tiktokLiveConnection: WebcastPushConnection
 ) => {
 	socket.on(disconnectEventName, () => {
 		tiktokLiveConnection.disconnect();
-		emitDisconnect(socketId, server);
+		emitDisconnect(id, server);
 	});
 };
 
 /**
  * 接続情報を送信
- * @param {string} socketId ソケットID
+ * @param {string} id ユーザID
  * @param {SocketServer} server Socket.ioサーバ
  * @param {ConnectState} state 接続状態
  */
-const emitConnect = (socketId: string, server: SocketServer, state: ConnectState) => {
-	server.emit(connectEventName, {
-		socketId,
+const emitConnect = (id: string, server: SocketServer, state: ConnectState) => {
+	server.to(id).emit(connectEventName, {
+		id,
 		roomId: state.roomId,
 		isConnected: state.isConnected
 	});
@@ -135,21 +133,21 @@ const emitConnect = (socketId: string, server: SocketServer, state: ConnectState
 
 /**
  * 切断情報を送信
- * @param {string} socketId ソケットID
+ * @param {string} id ユーザID
  * @param {SocketServer} server Socket.ioサーバ
  */
-const emitDisconnect = (socketId: string, server: SocketServer) => {
-	server.emit(disconnectEventName, { ...disconnectMessage, socketId });
+const emitDisconnect = (id: string, server: SocketServer) => {
+	server.to(id).emit(disconnectEventName, { ...disconnectMessage, id });
 };
 
 /**
  * ギフトを送信する
- * @param {string} socketId ソケットID
+ * @param {string} id ユーザID
  * @param {SocketServer} server Socket.ioサーバ
  * @param {Gift} gift ギフト
  */
-const emitGift = (socketId: string, server: SocketServer, gift: Gift) => {
-	const parameter = parameterMap.get(socketId);
+const emitGift = (id: string, server: SocketServer, gift: Gift) => {
+	const parameter = parameterMap.get(id);
 	if (parameter) {
 		const totalDiamond = gift.diamondCount * gift.repeatCount;
 		const raffle = drawRaffle(parameter.raffle.probability);
@@ -163,14 +161,14 @@ const emitGift = (socketId: string, server: SocketServer, gift: Gift) => {
 		const pick = pickChoice(parameter.pick.choices);
 		// 抽選結果をクライアントに送信
 		const giftEmitMessage = Object.freeze<GiftEmitMessage>({
-			socketId,
+			id,
 			userName: gift.nickname,
 			diamond: totalDiamond,
 			raffle,
 			weightedRaffle,
 			pick
 		});
-		server.emit('recieveGift', giftEmitMessage);
+		server.to(id).emit('recieveGift', giftEmitMessage);
 		console.log(`[raffle]: ${JSON.stringify(raffle)}`);
 		console.log(`[weightedRaffle]: ${JSON.stringify(weightedRaffle)}`);
 		console.log(`[pick]: ${JSON.stringify(pick)}`);
